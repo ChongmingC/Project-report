@@ -1,6 +1,6 @@
-### Example: Calculating Copy Number for a Sample
+### 1 Calculating Copy Number 
 
-If the reference slicing step is missing, you can proceed without it.
+I take one sample as an example.
 
 #### 1.1 Slicing
 
