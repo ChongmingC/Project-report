@@ -1,0 +1,790 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-12-11"
+---
+
+```{r}
+library(surviplot)
+library(beeswarm)
+
+clin <- read.table('merged_cn_TCGA_survival_data.csv', sep=',', as.is=T, header=T, row.names=1)
+
+```
+
+```{r}
+library(survival)
+```
+
+
+```{r}
+stage_early_late.os_summary_results1 <- read.table('coxph/coxph.stage_early_late.os_summary_results1.csv', sep=',', as.is=T, header=T)
+```
+
+
+```{r}
+clin <- clin[clin$ajcc_pathologic_tumor_stage != "[Not Available]", ]
+
+```
+
+
+#PFI.time and OS.time are converted to time by year.
+```{r}
+surv.pfi <- Surv(clin$PFI.time/365, clin$PFI)
+surv.os <- Surv(clin$OS.time/365, clin$OS)
+
+```
+
+
+
+#test early late 2
+
+```{r}
+clin$ajcc_pathologic_tumor_stage_EL <- factor(ifelse(clin$ajcc_pathologic_tumor_stage %in% c("Stage III", "Stage IV"), 
+                                                           "Late Stage", "Early Stage"))
+
+```
+
+```{r}
+cox_model <- coxph(censor(surv.os,5) ~ tumor.45S + age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage_EL , data = clin)
+summary(cox_model)
+```
+```{r}
+
+library(survminer)
+```
+
+
+
+```{r}
+# Plot grouped survival curves
+fit <- survfit(cox_model, data = clin)
+ggsurvplot(fit, data = clin,
+           conf.int = TRUE,  # Show confidence intervals
+           pval = TRUE,      # Display p-value
+           risk.table = TRUE,# Show risk table
+           ggtheme = theme_minimal(),
+           title = "Survival Curves by Cox Model")
+```
+
+
+
+
+
+#test stage1 2 3 exclude stage1 coz only 1 for stage 1
+```{r}
+clin_stage <- clin
+clin_stage <- clin[clin$ajcc_pathologic_tumor_stage != "Stage I", ]
+
+```
+
+```{r}
+surv.pfi_stage <- Surv(clin_stage$PFI.time/365, clin_stage$PFI)
+surv.os_stage <- Surv(clin_stage$OS.time/365, clin_stage$OS)
+
+```
+
+
+```{r}
+cox_model_stage <- coxph(censor(surv.os_stage,5) ~ tumor.45S + age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage , data = clin_stage)
+summary(cox_model_stage)
+```
+
+
+#all
+
+
+
+
+
+
+#ajcc_pathologic_tumor_stage_EL pfi
+```{r}
+# Initialize dataframe to store results
+cox_summary <- data.frame(
+  Variable = character(),        # Covariate name
+  Coefficient = numeric(),       # Regression coefficient
+  Hazard_Ratio = numeric(),      # Hazard ratio
+  SE = numeric(),                # Standard error
+  z_value = numeric(),           # z value
+  p_value = numeric(),           # p-value
+  exp_neg_coef = numeric(),      # Inverse of hazard ratio
+  lower_95 = numeric(),          # Lower 95% confidence interval
+  upper_95 = numeric(),          # Upper 95% confidence interval
+  Concordance = numeric(),       # Concordance index
+  Likelihood_Ratio_Test = numeric(), # Likelihood ratio test
+  Wald_Test = numeric(),         # Wald test
+  Score_Test = numeric(),        # Score test
+  stringsAsFactors = FALSE
+)
+
+
+# cn
+for (i in 1:27) {
+  #Get covariate name
+  var_name <- colnames(clin)[i]
+  #print(var_name)
+
+  # formula
+  formula <- as.formula(paste("censor(surv.pfi, 5) ~", var_name, "+ age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage_EL"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = clin)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # # Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # Extract the results of stage EL
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage_EL",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+
+#ratio blood/tumor 
+# Extract the results for each covariate
+for (i in seq(1, 18, by=2)) {
+  #Get covariate name
+  var_name <- paste(colnames(clin)[i+1], "/", colnames(clin)[i])
+  #print(var_name)
+  
+  temp_data <- clin
+  temp_data$new_var <- temp_data[[i+1]] / temp_data[[i]]  # 计算比值
+
+  # formula
+  formula <- as.formula(paste("censor(surv.pfi, 5) ~ new_var + age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage_EL"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = temp_data)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  #Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # Extract the results of stage EL
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage_EL",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+#ratio blood/tumor without correction
+# Extract the results for each covariate
+for (i in seq(1, 18, by = 2)) {
+  #Get covariate name
+  var_name <- paste(colnames(clin)[((i + 1) / 2 + 18)], "/", colnames(clin)[i])
+  #print(var_name)
+  
+  temp_data <- clin
+  temp_data$new_var <- as.numeric(temp_data[[((i + 1) / 2 + 18)]]) / as.numeric(temp_data[[i]])  
+
+  # formula
+  formula <- as.formula(paste("censor(surv.pfi, 5) ~ new_var + age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage_EL"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = temp_data)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # # Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # Extract the results of stage EL
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage_EL",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+
+
+
+
+# save
+write.csv(cox_summary, "coxph/coxph.stage_early_late.pfi_summary_results1.csv", row.names = FALSE)
+
+
+
+print(cox_summary)
+```
+
+
+
+
+
+
+#ajcc_pathologic_tumor_stage_EL os
+```{r}
+# Initialize the data frame that holds the results
+cox_summary <- data.frame(
+  Variable = character(), # covariate name
+  Coefficient = numeric(), # Regression coefficient
+  Hazard_Ratio = numeric(), # Risk ratio
+  SE = numeric(), # Standard Error
+  z_value = numeric(), # z value
+  p_value = numeric(), # p value
+  exp_neg_coef = numeric(), # inverse risk ratio
+  lower_95 = numeric(), # Lower bound of 95% confidence interval
+  upper_95 = numeric(), # 95% confidence interval upper bound
+  Concordance = numeric(), # Consistency index
+  Likelihood_Ratio_Test = numeric(), # Likelihood ratio test
+  Wald_Test = numeric(), # Wald test
+  Score_Test = numeric(), # Score test
+  stringsAsFactors = FALSE
+)
+
+
+# cn
+for (i in 1:27) {
+  #Get covariate name
+  var_name <- colnames(clin)[i]
+  #print(var_name)
+
+  # formula
+  formula <- as.formula(paste("censor(surv.os, 5) ~", var_name, "+ age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage_EL"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = clin)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # # Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # Extract the results of stage EL
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage_EL",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage_EL", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage_EL", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+
+
+
+
+#ajcc_pathologic_tumor_stage pfi
+```{r}
+# Initialize the data frame that holds the results
+cox_summary <- data.frame(
+  Variable = character(), # covariate name
+  Coefficient = numeric(), # Regression coefficient
+  Hazard_Ratio = numeric(), # Risk ratio
+  SE = numeric(), # Standard Error
+  z_value = numeric(), # z value
+  p_value = numeric(), # p value
+  exp_neg_coef = numeric(), # inverse risk ratio
+  lower_95 = numeric(), # Lower bound of 95% confidence interval
+  upper_95 = numeric(), # 95% confidence interval upper bound
+  Concordance = numeric(), # Consistency index
+  Likelihood_Ratio_Test = numeric(), # Likelihood ratio test
+  Wald_Test = numeric(), # Wald test
+  Score_Test = numeric(), # Score test
+  stringsAsFactors = FALSE
+)
+
+
+# cn
+for (i in 1:27) {
+  #Get covariate name
+  var_name <- colnames(clin)[i]
+  #print(var_name)
+
+  # formula
+  formula <- as.formula(paste("censor(surv.pfi_stage, 5) ~", var_name, "+ age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = clin_stage)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # # Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # extract AJCC
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+
+
+
+
+
+#ajcc_pathologic_tumor_stage os
+```{r}
+# Initialize the data frame that holds the results
+cox_summary <- data.frame(
+  Variable = character(), # covariate name
+  Coefficient = numeric(), # Regression coefficient
+  Hazard_Ratio = numeric(), # Risk ratio
+  SE = numeric(), # Standard Error
+  z_value = numeric(), # z value
+  p_value = numeric(), # p value
+  exp_neg_coef = numeric(), # inverse risk ratio
+  lower_95 = numeric(), # Lower bound of 95% confidence interval
+  upper_95 = numeric(), # 95% confidence interval upper bound
+  Concordance = numeric(), # Consistency index
+  Likelihood_Ratio_Test = numeric(), # Likelihood ratio test
+  Wald_Test = numeric(), # Wald test
+  Score_Test = numeric(), # Score test
+  stringsAsFactors = FALSE
+)
+
+# cn
+for (i in 1:27) {
+  #Get covariate name
+  var_name <- colnames(clin)[i]
+  #print(var_name)
+
+  # formula
+  formula <- as.formula(paste("censor(surv.os_stage, 5) ~", var_name, "+ age_at_initial_pathologic_diagnosis + gender + ajcc_pathologic_tumor_stage"))
+
+  # coxph model
+  cox_model <- coxph(formula, data = clin_stage)
+  cox_summary_temp <- summary(cox_model)
+
+  # Extract the results of the main covariates
+  main_var_row <- data.frame(
+    Variable = var_name,
+    Coefficient = cox_summary_temp$coefficients[1, "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients[1, "coef"]),
+    SE = cox_summary_temp$coefficients[1, "se(coef)"],
+    z_value = cox_summary_temp$coefficients[1, "z"],
+    p_value = cox_summary_temp$coefficients[1, "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients[1, "coef"]),
+    lower_95 = cox_summary_temp$conf.int[1, "lower .95"],
+    upper_95 = cox_summary_temp$conf.int[1, "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # # Extract the results of age
+  age_row <- data.frame(
+    Variable = "age_at_initial_pathologic_diagnosis",
+    Coefficient = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"],
+    Hazard_Ratio = exp(cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    SE = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "se(coef)"],
+    z_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "z"],
+    p_value = cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "Pr(>|z|)"],
+    exp_neg_coef = exp(-cox_summary_temp$coefficients["age_at_initial_pathologic_diagnosis", "coef"]),
+    lower_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "lower .95"],
+    upper_95 = cox_summary_temp$conf.int["age_at_initial_pathologic_diagnosis", "upper .95"],
+    Concordance = cox_summary_temp$concordance[1],
+    Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+    Wald_Test = cox_summary_temp$waldtest[1],
+    Score_Test = cox_summary_temp$sctest[1]
+  )
+
+  # Extract the results of gender
+  gender_levels <- rownames(cox_summary_temp$coefficients)
+  gender_row <- NULL
+  if (any(grepl("gender", gender_levels))) {
+    gender_row <- data.frame(
+      Variable = "gender",
+      Coefficient = cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("gender", gender_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("gender", gender_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("gender", gender_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("gender", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # 提取固定协变量 ajcc_pathologic_tumor 的结果
+  ajcc_levels <- rownames(cox_summary_temp$coefficients)
+  ajcc_row <- NULL
+  if (any(grepl("ajcc_pathologic_tumor_stage", ajcc_levels))) {
+    ajcc_row <- data.frame(
+      Variable = "ajcc_pathologic_tumor_stage",
+      Coefficient = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"],
+      Hazard_Ratio = exp(cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"]),
+      SE = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "se(coef)"],
+      z_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "z"],
+      p_value = cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "Pr(>|z|)"],
+      exp_neg_coef = exp(-cox_summary_temp$coefficients[grepl("ajcc_pathologic_tumor_stage", ajcc_levels), "coef"]),
+      lower_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage", rownames(cox_summary_temp$conf.int)), "lower .95"],
+      upper_95 = cox_summary_temp$conf.int[grepl("ajcc_pathologic_tumor_stage", rownames(cox_summary_temp$conf.int)), "upper .95"],
+      Concordance = cox_summary_temp$concordance[1],
+      Likelihood_Ratio_Test = cox_summary_temp$logtest[1],
+      Wald_Test = cox_summary_temp$waldtest[1],
+      Score_Test = cox_summary_temp$sctest[1]
+    )
+  }
+
+  # combine
+  cox_summary <- rbind(cox_summary, main_var_row, age_row, gender_row, ajcc_row)
+}
+
+
+
+
+
+
+
+# save
+write.csv(cox_summary, "coxph/coxph.stage123.os_summary_results.csv", row.names = FALSE)
+
+
+
+print(cox_summary)
+```
+

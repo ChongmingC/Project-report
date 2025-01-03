@@ -1,0 +1,1817 @@
+
+#packages
+```{r}
+library(reshape2)
+library(surviplot)
+library(beeswarm)
+library(survival)
+
+```
+
+```{r}
+library(gridExtra)
+library(grid)
+```
+
+
+#data
+```{r}
+clin <- read.table('Kaplan meier analysis_nicolai/merged_cn_TCGA_survival_data.csv', sep=',', as.is=T, header=T, row.names=1)
+```
+
+#Survival analysis data 
+PFI.time and OS.time converted to time by year.
+```{r}
+surv.pfi <- Surv(clin$PFI.time/365, clin$PFI)
+surv.os <- Surv(clin$OS.time/365, clin$OS)
+
+```
+
+
+```{r}
+tmp.list <- as.list(clin[,1:18])
+```
+
+
+
+
+
+
+
+```{r}
+pdf('Kaplan meier analysis_test/sorted_CN.pdf', width=15, height=15)
+par(las=1, mfrow=c(3,3))
+
+#blood
+for (i in seq(1, 18, by=2)) {
+  
+
+  plot(sort(clin[, i]), type = "b", col = "#3182bd99", lwd = 2, pch = 16,
+       xlab = "Index", ylab = "Normalized rDNA CN",
+       main = colnames(clin)[i])
+  
+}
+
+#tumor
+
+for (i in seq(2, 18, by=2)) {
+  
+
+  plot(sort(clin[, i]), type = "b", col = "#3182bd99", lwd = 2, pch = 16,
+       xlab = "Index", ylab = "Normalized rDNA CN",
+       main = colnames(clin)[i])
+  
+}
+
+#tumor_without correction
+
+for (i in 19:27) {
+  
+
+  plot(sort(clin[, i]), type = "b", col = "#3182bd99", lwd = 2, pch = 16,
+       xlab = "Index", ylab = "Normalized rDNA CN",
+       main = colnames(clin)[i])
+  
+}
+
+dev.off()
+
+```
+
+
+
+#figure3.1 Distribution of rDNA Copy Numbers
+
+```{r}
+pdf('image/3.1boxplot_gender.pdf', width=8, height=5)
+par(mfrow = c(1, 1),las=1,oma=c(5,0,0,0),las=2) 
+
+
+#blood
+
+gender_blood_data <- clin[, c(17,13,5,9,11,30)]
+
+# Convert to long format
+data_long_blood <- reshape2::melt(gender_blood_data, id.vars = "gender", variable.name = "Category", value.name = "Value")
+
+# Make sure Category and gender are character types
+data_long_blood$Category <- as.character(data_long_blood$Category)
+data_long_blood$gender <- as.character(data_long_blood$gender)
+
+# Group  Order
+data_long_blood$Group <- interaction(data_long_blood$Category, data_long_blood$gender, sep = ":")
+
+#character types
+group_levels <- as.character(levels(data_long_blood$Group))
+categories <- unique(data_long_blood$Category)  
+
+# positions
+positions <- c()
+for (i in seq_along(categories)) {
+  base_pos <- (i - 1) * 2  
+  positions[which(startsWith(group_levels, categories[i]))] <- c(base_pos, base_pos + 0.8)  
+}
+
+#short_labels <- c("5S", "5.8S", "18S", "28S", "45S")
+# Beeswarm
+beeswarm(Value ~ Group, data = data_long_blood,
+         col = c('#de2d2699', '#3182bd99'), pch = 16,cex = 0.6, 
+         main = "Normalized rDNA CN",
+         xlab = "",
+         ylab = "Blood",
+         method = "center",
+         corral = "wrap",
+         corralWidth = 0.6,  # width
+         at = positions,
+         axes=FALSE)
+         #labels = rep(short_labels, each = 2))
+
+
+
+
+axis(2)
+
+
+
+# Add boxplot
+bxplot(Value ~ Group, data = data_long_blood, 
+       add = TRUE, col = "#4D4D4D", at = positions)
+
+# Add legend
+legend("topright",                               # Legend position
+       legend = c("Male", "Female"),            # Legend content
+       col = c('#3182bd', '#de2d26'),           # Legend colors, consistent with beeswarm
+       pch = 16,                                 # Shape of legend points
+       bty = "n",
+       cex = 0.8,                               # Text size, default is 1
+       pt.cex = 1)                               # No legend border
+
+
+
+
+#tumor
+gender_tumor_data <- clin[, c(18, 14, 6, 10, 12, 30)]
+
+# Convert to long format for plotting
+data_long <- reshape2::melt(gender_tumor_data, id.vars = "gender", variable.name = "Category", value.name = "Value")
+
+# Ensure Category and gender are character types
+data_long$Category <- as.character(data_long$Category)
+data_long$gender <- as.character(data_long$gender)
+
+# Create Group order
+data_long$Group <- interaction(data_long$Category, data_long$gender, sep = ":")
+
+# Ensure group_levels are character types
+group_levels <- as.character(levels(data_long$Group))
+categories <- unique(data_long$Category)  # Ensure categories are character types
+
+# Define positions
+positions <- c()
+for (i in seq_along(categories)) {
+  base_pos <- (i - 1) * 2  # Set spacing for different Categories
+  positions[which(startsWith(group_levels, categories[i]))] <- c(base_pos, base_pos + 0.8)  # Position for male and female
+}
+
+#short_labels <- c("5S", "5.8S", "18S", "28S", "45S")
+# Plot scatter plot (Beeswarm)
+beeswarm(Value ~ Group, data = data_long,
+         col = c('#de2d2699', '#3182bd99'), pch = 16,cex = 0.6, 
+         main = "",
+         xlab = "",
+         ylab = "Tumor",
+         method = "center",
+         corral = "wrap",
+         corralWidth = 0.6,  # Adjust width
+         at = positions,
+         axes=FALSE)
+         #labels = rep(short_labels, each = 2)) # Modify to short labels and specify horizontal positions for each group
+
+# Customize horizontal axis
+categories <- c("5S", "5.8S", "18S", "28S", "45S")  # Simplified horizontal axis labels
+axis(1, at = seq(0.2, length(categories) * 2, by = 2), 
+     labels = categories,tick = FALSE,las = 0)  # Set tick length, show only labels
+
+# Add default vertical axis
+ticks <- seq(0.2, length(categories) * 2, by = 2)   # Define tick positions
+line_start <- min(ticks) - 1.075  # Main line start point
+line_end <- max(ticks) + 1    # Main line end point
+lines(c(line_start, line_end), c(0, 0), col = "black", lwd = 1)  # Draw main line
+
+axis(2)
+
+#abline(h = 0, col = "black", lwd = 1)  # Draw horizontal main line
+
+bxplot(Value ~ Group, data = data_long, 
+       add = TRUE, col = "#4D4D4D", at = positions)
+
+
+
+
+
+
+dev.off()
+
+```
+
+
+
+
+#figure3.2 45s/5s
+#Us python
+
+#figure3.3+appendix T.test + boxplot
+##figure3.3.1 gender appendix
+```{r}
+#pdf('image/appendix_f1_gender.pdf', width=15, height=15)
+pdf('image/appendix.f1.gender.pdf', width=8.27, height=11.69) #A4
+par(las=1, mfrow=c(3,3))
+
+#blood
+for (i in seq(1, 18, by=2)) {
+  
+  beeswarm(clin[, i] ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(clin[, i] ~ clin$gender, add = TRUE)  
+  
+  t_res <- t.test(clin[, i] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+    
+  text(x = 2.3,  
+       y = min(clin[, i], na.rm = TRUE) * 0.95,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  
+  beeswarm(clin[, i] ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(clin[, i] ~ clin$gender, add = TRUE)  
+  
+  t_res <- t.test(clin[, i] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3) 
+  
+    
+  text(x = 2.3,  
+       y = min(clin[, i], na.rm = TRUE) * 0.95,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+#tumor_without correction  
+for (i in 19:27) {
+  beeswarm(clin[, i] ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('
+           ylab = 'rDNA CN',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,
+           xlab = '')                          
+  
+  bxplot(clin[, i] ~ clin$gender, add = TRUE)  
+
+  t_res <- t.test(clin[, i] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+    
+  text(x = 2.3,  
+       y = min(clin[, i], na.rm = TRUE) * 0.95,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#ratio blood/tumor
+for (i in seq(1, 18, by=2)) {
+  
+  ratio_val <- as.numeric(clin[,(i+1)])/as.numeric(clin[,i])
+  
+  beeswarm(ratio_val ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('
+           ylab = 'rDNA CN',       
+           main=paste(colnames(clin)[(i+1)],' /\n',colnames(clin)[i],sep=''),  
+           xlab = '')                          
+  
+  bxplot(ratio_val ~ clin$gender, add = TRUE)  
+  
+  t_res <- t.test(ratio_val ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+    
+  text(x = 2.3,  
+       y = min(ratio_val, na.rm = TRUE) * 0.95,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#ratio blood/tumor without correction
+for (i in seq(1, 18, by=2)) {
+  
+  ratio_val <- as.numeric(clin[,((i+1)/2+18)])/as.numeric(clin[,i])
+  
+  beeswarm(ratio_val ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('
+           ylab = 'rDNA CN',       
+           main=paste(colnames(clin)[((i+1)/2+18)],' /\n',colnames(clin)[i],sep=''),
+           cex.main=0.9,
+           xlab = '')                          
+  
+  bxplot(ratio_val ~ clin$gender, add = TRUE)  
+  
+  t_res <- t.test(ratio_val ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+    
+  text(x = 2.3,  
+       y = min(ratio_val, na.rm = TRUE) * 0.95,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+dev.off()
+
+```
+
+##figure3.3.1 gender results
+
+```{r}
+#tiff("image/fig3.3gender.tiff", width = 30, height = 12, units = "cm", res = 300)
+pdf("image/fig3.3gender.pdf", width = 10, height = 4.72)
+#par(par(pin = c(1, 3)))
+par(las=1, mfrow=c(2,5))
+par(mar = c(2, 4, 1.5, 0.1), xaxs = "i")
+
+#blood 
+t_res <- t.test(clin[, 17] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(clin[, 17] ~ clin$gender,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(clin)[17]),
+         cex.main=0.9,
+         xlab = '')                          
+  
+bxplot(clin[, 17] ~ clin$gender, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(clin[, 17], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+
+
+for (i in c(13, 5, 9, 11)) {
+  
+  t_res <- t.test(clin[, i] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(clin[, i] ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,
+           xlab = '')                          
+  
+  bxplot(clin[, i] ~ clin$gender, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor
+t_res <- t.test(clin[, 18] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(clin[, 18] ~ clin$gender,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(clin)[18]),
+         cex.main=0.9,
+         xlab = '')                          
+  
+bxplot(clin[, 18] ~ clin$gender, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(clin[, 18], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+for (i in c(14,6,10,12)) {
+  
+  t_res <- t.test(clin[, i] ~ clin$gender, subset = !clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(clin[, i] ~ clin$gender,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,
+           xlab = '')                          
+  
+  bxplot(clin[, i] ~ clin$gender, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+
+
+
+dev.off()
+
+```
+
+##figure3.4 age
+###age+appendix
+```{r}
+pdf('image/appendix.f2.age.latex.pdf', width=12, height=12)#latex
+par(mar = c(2, 4, 1.5, 1))
+
+#pdf('image/appendix.f2.age.A4.pdf', width=8.27, height=11.69)  # A4
+par(las=1, mfrow=c(3,3))  
+
+
+
+
+#blood
+for (i in seq(1, 18, by=2)) {
+  plot(clin$age_at_initial_pathologic_diagnosis,clin[[i]], 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[i], "CN"), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(clin[[i]]~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,clin[[i]], method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  plot(clin$age_at_initial_pathologic_diagnosis,clin[[i]], 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[i], "CN"), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(clin[[i]]~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,clin[[i]], method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+
+#tumor_without correction  
+for (i in 19:27) {
+  plot(clin$age_at_initial_pathologic_diagnosis,clin[[i]], 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[i], "CN"), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(clin[[i]]~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,clin[[i]], method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+#ratio blood/tumor
+for (i in seq(1, 18, by=2)) {
+  ratio_val <- as.numeric(clin[,(i+1)])/as.numeric(clin[,i])
+  
+  #label <- paste(colnames(clin)[(i+1)], '/', colnames(clin)[i], sep='')
+  #wrapped_label <- paste(strwrap(label, width=10))
+  
+  plot(clin$age_at_initial_pathologic_diagnosis,ratio_val, 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[(i+1)], ' /', colnames(clin)[i],' CN', sep=''), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(ratio_val~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,ratio_val, method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+#ratio blood/tumor without correction
+for (i in seq(1, 18, by=2)) {
+  ratio_val <- as.numeric(clin[,((i+1)/2+18)])/as.numeric(clin[,i])
+  
+  #label <- paste(colnames(clin)[(i+1)], '/', colnames(clin)[i], sep='')
+  #wrapped_label <- paste(strwrap(label, width=10))
+  
+  plot(clin$age_at_initial_pathologic_diagnosis,ratio_val, 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[((i+1)/2+18)],' /',colnames(clin)[i],' CN', sep=''), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(ratio_val~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,ratio_val, method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+dev.off()
+```
+
+
+##figure3.4 age
+###age+results
+```{r}
+pdf('image/fig3.4.age.pdf', width=10, height=8)#latex
+
+# Create layout matrix for 2+4 arrangement
+layout_mat <- matrix(c(1,2,0,0,
+                      3,4,5,6,
+                      7,8,9,10), 
+                    nrow=3, byrow=TRUE)
+layout(layout_mat)
+
+
+
+par(mar = c(4, 4, 2, 1),pty="s")
+#par(las=1, mfrow=c(3,4))  
+
+
+#blood.5s tumor.5s
+#blood tumor
+
+for (i in c(17,18,13,5,9,11,14,6,10,12)) {
+  plot(clin$age_at_initial_pathologic_diagnosis,clin[[i]], 
+       col=c(2,4)[match(clin$gender, c('FEMALE','MALE'))],
+       pch=16, 
+       ylab=paste(colnames(clin)[i], "CN"), 
+       xlab='age')
+  
+  #regression line
+  abline(lm(clin[[i]]~clin$age_at_initial_pathologic_diagnosis), col=1, lty=2)
+  
+  #spearman correlation
+  tmp <- cor.test(clin$age_at_initial_pathologic_diagnosis,clin[[i]], method='spearman')
+  
+  #add results
+  legend('topleft', 
+         legend=paste('rho = ', signif(tmp$estimate,2), ', P = ', signif(tmp$p.value,2),sep=''), 
+         bty='n', pch=-1, lty=2, col=1)
+}
+
+
+
+
+
+
+
+
+
+
+dev.off()
+```
+
+##figure3.5 tumor status
+###tumor status+appendix
+tumor status
+```{r}
+pdf('image/appendix.f3.tumor_status.pdf', width=8.27, height=11.69)
+par(las=1, mfrow=c(3,3))
+
+#exclude "N/A"
+filtered_clin <- clin[clin$tumor_status != "N/A", ]
+
+
+#blood
+for (i in seq(1, 18, by=2)) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  # figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$tumor_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  # figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$tumor_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+#tumor_without correction  
+for (i in 19:27) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,# figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$tumor_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+dev.off()
+```
+```{r}
+pdf("image/fig3.5.tumor_status.pdf", width = 10, height = 8)
+#par(par(pin = c(1, 3)))
+par(las=1, mfrow=c(3,5))
+par(mar = c(2, 4, 1.5, 0.1), xaxs = "i")
+
+#exclude "N/A"
+filtered_clin <- clin[clin$tumor_status != "N/A", ]
+
+
+#blood 
+t_res <- t.test(filtered_clin[, 17] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 17] ~ filtered_clin$tumor_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[17]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 17] ~ filtered_clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 17], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+
+
+for (i in c(13, 5, 9, 11)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(clin[, i] ~ clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor
+t_res <- t.test(filtered_clin[, 18] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 18] ~ filtered_clin$tumor_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[18]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 18] ~ filtered_clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 18], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+for (i in c(14,6,10,12)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(filtered_clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor with correction
+t_res <- t.test(filtered_clin[, 27] ~ filtered_clin$tumor_status, subset = !filtered_clin$tumor_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 27] ~ filtered_clin$tumor_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[27]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 27] ~ filtered_clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 27], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+for (i in c(25,21,23,24)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$tumor_status, subset = !filtered_clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$tumor_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = 'rDNA CN',       
+           main = paste(colnames(filtered_clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$tumor_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+
+dev.off()
+
+
+```
+##figure3.5 stage
+###tumor status+appendix+results+raw figures
+```{r}
+filtered_clin <- clin[!(clin$ajcc_pathologic_tumor_stage %in% c("Stage I", "[Not Available]")), ]
+```
+
+
+```{r}
+
+compare_groups <- c('Stage III', 'Stage IV')
+
+# Initialize the data frame to store the results
+result_table <- data.frame(Group1 = character(),
+                           Group2 = character(),
+                           p_value = numeric(),
+                           Feature = character(),
+                           stringsAsFactors = FALSE)
+for (i in seq(1, 18, by=2)) {
+  
+  
+  tiff(filename = paste0("image/stage/stage_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 6, height = 6, units = "in", res = 300)
+  # Draw beeswarm plot
+  par(mar = c(9, 5, 3, 2))  # Margins: bottom, left, top, right. Adjust to reduce size.
+  beeswarm(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage, add = TRUE)  
+  
+  # Compare Stage II with Stage III and Stage IV
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Stage II'
+    group2 <- compare_groups[j]
+    
+    # Extract data for Stage II and target group
+    subset_data <- filtered_clin[filtered_clin$ajcc_pathologic_tumor_stage %in% c(group1, group2), ]
+    
+    # Perform t-test
+    t_res <- t.test(subset_data[, i] ~ subset_data$ajcc_pathologic_tumor_stage)
+    p_val <- signif(t_res$p.value, 3)
+    
+    # Save results to dataframe
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  # Draw blank space
+  #grid.newpage()  # Start a new drawing area
+  #plot.new()
+  
+  # Draw table
+  pushViewport(viewport(x = 0.2, y = 0.15, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  # Restore viewport to avoid affecting the next plot
+  dev.off()
+}
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  
+  
+  
+  tiff(filename = paste0("image/stage/stage_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 6, height = 6, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Stage II'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$ajcc_pathologic_tumor_stage %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$ajcc_pathologic_tumor_stage)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.15, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+#tumor_without correction  
+for (i in 19:27) {
+  
+  
+  
+  tiff(filename = paste0("image/stage/stage_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 6, height = 6, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Stage II'
+    group2 <- compare_groups[j]
+    
+    # Extract data for Stage II and target group
+    subset_data <- filtered_clin[filtered_clin$ajcc_pathologic_tumor_stage %in% c(group1, group2), ]
+    
+    # Perform t-test
+    t_res <- t.test(subset_data[, i] ~ subset_data$ajcc_pathologic_tumor_stage)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.15, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+```
+
+
+#stage.fig.results no ylab
+```{r}
+compare_groups <- c('Stage III', 'Stage IV')
+
+
+result_table <- data.frame(Group1 = character(),
+                           Group2 = character(),
+                           p_value = numeric(),
+                           Feature = character(),
+                           stringsAsFactors = FALSE)
+
+for (i in 1:27) {
+  
+  
+  
+  tiff(filename = paste0("image/stage/no_ylab/stage_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 6, height = 6, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = '',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$ajcc_pathologic_tumor_stage, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Stage II'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$ajcc_pathologic_tumor_stage %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$ajcc_pathologic_tumor_stage)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.15, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+
+```
+
+```{r}
+tiff("image/stage/stage.fig.results/white.tiff", width = 6, height = 6, units = "in", res = 300)
+```
+
+
+##figure3.7 vital status
+###tumor status+appendix
+tumor status
+```{r}
+pdf('image/appendix.f5.vital_status.pdf', width=8.27, height=11.69)
+par(las=1, mfrow=c(3,3))
+
+#exclude "N/A"
+filtered_clin <- clin[clin$vital_status != "N/A", ]
+
+
+#blood
+for (i in seq(1, 18, by=2)) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  # figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$vital_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste('TCGA BLCA - ', colnames(clin)[i]),  # figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$vital_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+#tumor_without correction  
+for (i in 19:27) {
+  # beeswarm
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         # Stacking point distributions within groups
+           pch = 16,                # Dot pattern is a solid circle
+           col = c('#de2d2699', '#3182bd99'),  # color
+           ylab = 'rDNA CN',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,# figure title
+           xlab = '')                          #  x lab
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$vital_status, add = TRUE)  # boxplot
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+dev.off()
+```
+
+####vital status results
+```{r}
+pdf("image/fig3.7.vital_status.pdf", width = 10, height = 8)
+#par(par(pin = c(1, 3)))
+par(las=1, mfrow=c(3,5))
+par(mar = c(2, 4, 1.5, 0.1), xaxs = "i")
+
+#exclude "N/A"
+filtered_clin <- clin[clin$vital_status != "N/A", ]
+
+
+#blood 
+t_res <- t.test(filtered_clin[, 17] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 17] ~ filtered_clin$vital_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[17]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 17] ~ filtered_clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 17], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+
+
+for (i in c(13, 5, 9, 11)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(clin[, i] ~ clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor
+t_res <- t.test(filtered_clin[, 18] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 18] ~ filtered_clin$vital_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[18]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 18] ~ filtered_clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 18], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+for (i in c(14,6,10,12)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = '',       
+           main = paste(colnames(filtered_clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+#tumor with correction
+t_res <- t.test(filtered_clin[, 27] ~ filtered_clin$vital_status, subset = !filtered_clin$vital_status %in% c('N/A'))
+p_val <- signif(t_res$p.value, 3)  
+  
+
+beeswarm(filtered_clin[, 27] ~ filtered_clin$vital_status,  
+         corral = 'wrap',         
+         pch = 16,                
+         col = c('#de2d2699', '#3182bd99'),
+         ylab = 'rDNA CN',     
+         main = paste(colnames(filtered_clin)[27]),
+         cex.main=0.9,
+         xlab = '',
+         cex.axis = 0.8)                          
+  
+bxplot(filtered_clin[, 27] ~ filtered_clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+text(x = 1.5,  
+       y = min(filtered_clin[, 27], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+
+
+for (i in c(25,21,23,24)) {
+  
+  t_res <- t.test(filtered_clin[, i] ~ filtered_clin$vital_status, subset = !filtered_clin$gender %in% c('N/A'))
+  p_val <- signif(t_res$p.value, 3)  
+  
+  
+  beeswarm(filtered_clin[, i] ~ filtered_clin$vital_status,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'), 
+           ylab = 'rDNA CN',       
+           main = paste(colnames(filtered_clin)[i]),
+           cex.main=0.9,
+           xlab = '',
+           cex.axis = 0.8)                          
+  
+  bxplot(filtered_clin[, i] ~ filtered_clin$vital_status, add = TRUE,boxwex = 0.1)  
+  
+  
+  text(x = 1.5,  
+       y = min(filtered_clin[, i], na.rm = TRUE) * 0.9,  
+       labels = paste('p =', p_val),
+       col = 'gray20',  
+       cex = 0.8,
+       font = 1)
+}
+
+
+
+dev.off()
+
+
+```
+
+
+##figure3.8 Treatment Outcome (First Course)e
+###Treatment Outcome (First Course)+appendix+results+raw figures
+
+```{r}
+filtered_clin <- clin[!(clin$treatment_outcome_first_course %in% c("[Not Applicable]", "[Unknown]", "[Not Applicable]", "[Not Available]")), ]
+```
+
+```{r}
+## Add line breaks for beeplot
+filtered_clin.plot <- clin[!(clin$treatment_outcome_first_course %in% c("[Not Applicable]", "[Unknown]", "[Not Applicable]", "[Not Available]")), ]
+
+filtered_clin.plot$treatment_outcome_first_course <- gsub(" ", "\n", filtered_clin.plot$treatment_outcome_first_course)
+```
+
+
+```{r}
+
+compare_groups <- c('Partial Remission/Response', 'Progressive Disease', 'Stable Disease')
+
+
+result_table <- data.frame(Group1 = character(),
+                           Group2 = character(),
+                           p_value = numeric(),
+                           Feature = character(),
+                           stringsAsFactors = FALSE)
+#blood
+for (i in seq(1, 18, by=2)) {
+  
+  tiff(filename = paste0("image/treatment/treatment_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 8, height = 7, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  
+ 
+  par(cex.axis = 0.8) 
+  beeswarm(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course, add = TRUE)
+  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Complete Remission/Response'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$treatment_outcome_first_course %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$treatment_outcome_first_course)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  #filtered_clin$treatment_outcome_first_course <- gsub(" ", "\n", filtered_clin$treatment_outcome_first_course)
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.1, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+#tumor
+for (i in seq(2, 18, by=2)) {
+  
+  
+  
+  tiff(filename = paste0("image/treatment/treatment_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 8, height = 7, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  par(cex.axis = 0.8) 
+  beeswarm(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin.plot)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Complete Remission/Response'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$treatment_outcome_first_course %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$treatment_outcome_first_course)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.1, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+#tumor_without correction  
+for (i in 19:27) {
+  
+  
+  
+  tiff(filename = paste0("image/treatment/treatment_", colnames(filtered_clin)[i], ".tiff"), 
+       width = 8, height = 7, units = "in", res = 300)
+  
+  par(mar = c(9, 5, 3, 2))  
+  par(cex.axis = 0.8)
+  beeswarm(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Complete Remission/Response'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$treatment_outcome_first_course %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$treatment_outcome_first_course)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.1, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+}
+
+```
+
+
+
+
+```{r}
+tiff("image/treatment/no_ylab/white.tiff", width = 8, height = 7, units = "in", res = 300)
+```
+
+#pick 5.8s pdf
+```{r}
+
+
+  
+  pdf("image/treatment/treatment.fig.results/fig3.8.5.8S.pdf", 
+       width = 8, height = 7)
+  
+  
+  result_table <- data.frame(Group1 = character(),
+                           Group2 = character(),
+                           p_value = numeric(),
+                           Feature = character(),
+                           stringsAsFactors = FALSE)
+  par(mar = c(9, 5, 3, 2))  
+  par(cex.axis = 0.8)
+  i<-25
+  beeswarm(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course,  
+           corral = 'wrap',         
+           pch = 16,                
+           col = c('#de2d2699', '#3182bd99'),  
+           ylab = 'rDNA CN',       
+           main = paste('', colnames(filtered_clin)[i]),  
+           xlab = '')                          
+  
+  bxplot(filtered_clin.plot[, i] ~ filtered_clin.plot$treatment_outcome_first_course, add = TRUE)  
+  
+  
+  for (j in 1:length(compare_groups)) {
+    group1 <- 'Complete Remission/Response'
+    group2 <- compare_groups[j]
+    
+    
+    subset_data <- filtered_clin[filtered_clin$treatment_outcome_first_course %in% c(group1, group2), ]
+    
+    
+    t_res <- t.test(subset_data[, i] ~ subset_data$treatment_outcome_first_course)
+    p_val <- signif(t_res$p.value, 3)
+    
+    
+    result_table <- rbind(result_table, 
+                          data.frame(Group1 = group1,
+                                     Group2 = group2,
+                                     p_value = p_val,
+                                     Feature = colnames(filtered_clin)[i]))
+  }
+  
+  
+  
+  #plot.new()
+  
+  
+  pushViewport(viewport(x = 0.2, y = 0.1, width = 0.7, height = 0.3, just = "left"))  
+  # x and y control the horizontal and vertical position (0 = left/bottom, 1 = right/top).
+  grid.draw(grid.table(result_table[result_table$Feature == colnames(filtered_clin)[i], -4],
+                       rows = NULL))
+  #display_table <- result_table[result_table$Feature == colnames(filtered_clin)[i], -4]
+  popViewport()  
+  dev.off()
+
+```
+
+#figure4.1 os
+```{r}
+pdf('image/OS.pdf', width=15, height=15)
+par(las=1, mfrow=c(3,3))
+
+
+
+
+#blood
+
+
+for(i in seq(1, 18, by=2)){
+    surviplot(censor(surv.os,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), main=colnames(clin)[i], ylab='Fraction alive', xlab='Time (years)', snames=c('Low', 'High'), stitle=c('Median rDNA CN'))
+}
+#as.numeric(clin[,i]) > median(as.numeric(clin[,i]))
+
+
+
+
+#tumor
+
+for(i in seq(2, 18, by=2)){
+    surviplot(censor(surv.os,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), 
+             main=colnames(clin)[i], 
+             ylab='Fraction alive', 
+             xlab='Time (years)', 
+             snames=c('Low', 'High'), 
+             stitle=c('Median rDNA CN'))
+}
+
+
+for (i in 19:27){
+    surviplot(censor(surv.os,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), 
+             main=colnames(clin)[i], 
+             ylab='Fraction alive', 
+             xlab='Time (years)', 
+             snames=c('Low', 'High'), 
+             stitle=c('Median rDNA CN'))
+}
+
+
+dev.off()
+```
+```{r}
+pdf('image/fig4.1.OS.pdf', width=15, height=10)
+par(las=1, mfrow=c(2,3))
+
+#blood
+
+
+for(i in c(17,18,27,11,12,24)){
+    surviplot(censor(surv.os,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), main=colnames(clin)[i], ylab='Fraction alive', xlab='Time (years)', snames=c('Low', 'High'), stitle=c('Median rDNA CN'))
+}
+```
+
+
+#figure4.1 pfi
+```{r}
+pdf('image/pfi1.pdf', width=10, height=12)
+par(las=1, mfrow=c(3,3))
+
+#blood
+
+
+for(i in seq(1, 18, by=2)){
+    surviplot(censor(surv.pfi,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), main=colnames(clin)[i], ylab='Fraction progression-free', xlab='Time (years)', snames=c('Low', 'High'), stitle=c('Median rDNA CN'))
+}
+#as.numeric(clin[,i]) > median(as.numeric(clin[,i]))
+
+
+
+
+#tumor
+
+for(i in seq(2, 18, by=2)){
+    surviplot(censor(surv.pfi,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), 
+             main=colnames(clin)[i], 
+             ylab='Fraction progression-free', 
+             xlab='Time (years)', 
+             snames=c('Low', 'High'), 
+             stitle=c('Median rDNA CN'))
+}
+
+for (i in 19:27){
+    surviplot(censor(surv.pfi,5) ~ as.numeric(clin[,i]) > median(as.numeric(clin[,i])), 
+             main=colnames(clin)[i], 
+             ylab='Fraction progression-free', 
+             xlab='Time (years)', 
+             snames=c('Low', 'High'), 
+             stitle=c('Median rDNA CN'))
+}
+
+
+dev.off()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

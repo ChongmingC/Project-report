@@ -1,0 +1,544 @@
+---
+title: "test1"
+output: html_document
+date: "2024-11-04"
+---
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Load ASCAT object
+ascat <- readRDS('BLCA_ASCAT_HG19.rds')
+```
+
+```{r}
+##############
+#Function to return chromosome positition for a given gene, based on an annotation file
+#name not name2 
+##############
+get.name.genepos <- function(gene=NULL, genepos=NULL, posfile='/farm/home/lr-tct-lif/birkba01/GenomeData/genes.UCSC.hg19.grch37.20141112.txt', load.genepos=FALSE, return.genepos=FALSE){
+	if(load.genepos){
+		genepos <- read.table(posfile,sep='\t',header=T,as.is=T)
+		genepos[,'chrom'] <- sub('chr','',genepos[,'chrom'])
+		genepos[,'chrom'] <- sub('X',23,genepos[,'chrom'])
+		genepos[,'chrom'] <- sub('Y',24,genepos[,'chrom'])
+		genepos <- genepos[genepos[,'chrom'] %in% 1:24,]
+	}
+	if(return.genepos){
+		return(genepos)
+	}
+	if(!return.genepos){
+		if(is.null(genepos) | is.null(gene)){ stop('\ngene and genepos must be given\n')}
+		gene_loc <- genepos[genepos[,'name'] %in% gene,,drop=F] #name not name2 
+		nchr <- length(unique(gene_loc[,'chrom']))
+		if(nrow(gene_loc) > 0 & nchr ==1){
+			gene_chr <- as.numeric(as.character(names(sort(table(gene_loc[,'chrom'])))))
+			gene_loc <- gene_loc[gene_loc[,'chrom'] %in% gene_chr,]
+			gene_start <- min(gene_loc[,'txStart'])
+			gene_end <- max(gene_loc[,'cdsEnd'])
+			genepos_out <- setNames(c(gene_chr, gene_start, gene_end), c('Chr','Start','End'))
+		} else {
+			genepos_out <- setNames(c(NA, NA, NA), c('Chr','Start','End'))
+		}
+		return(genepos_out)
+	}
+}
+```
+
+```{r}
+get.genepos <- function(gene=NULL, genepos=NULL, posfile='/farm/home/lr-tct-lif/birkba01/GenomeData/genes.UCSC.hg19.grch37.20141112.txt', load.genepos=FALSE, return.genepos=FALSE){
+	if(load.genepos){
+		genepos <- read.table(posfile,sep='\t',header=T,as.is=T)
+		genepos[,'chrom'] <- sub('chr','',genepos[,'chrom'])
+		genepos[,'chrom'] <- sub('X',23,genepos[,'chrom'])
+		genepos[,'chrom'] <- sub('Y',24,genepos[,'chrom'])
+		genepos <- genepos[genepos[,'chrom'] %in% 1:24,]
+	}
+	if(return.genepos){
+		return(genepos)
+	}
+	if(!return.genepos){
+		if(is.null(genepos) | is.null(gene)){ stop('\ngene and genepos must be given\n')}
+		gene_loc <- genepos[genepos[,'name2'] %in% gene,,drop=F]
+		nchr <- length(unique(gene_loc[,'chrom']))
+		if(nrow(gene_loc) > 0 & nchr ==1){
+			gene_chr <- as.numeric(as.character(names(sort(table(gene_loc[,'chrom'])))))
+			gene_loc <- gene_loc[gene_loc[,'chrom'] %in% gene_chr,]
+			gene_start <- min(gene_loc[,'txStart'])
+			gene_end <- max(gene_loc[,'cdsEnd'])
+			genepos_out <- setNames(c(gene_chr, gene_start, gene_end), c('Chr','Start','End'))
+		} else {
+			genepos_out <- setNames(c(NA, NA, NA), c('Chr','Start','End'))
+		}
+		return(genepos_out)
+	}
+}
+```
+
+
+
+```{r}
+##############
+# Function to retrieve chromosome positions for each gene in `processed gene lists` from `genepos`, 
+# returning a data frame with gene info and positions (Chr, Start, End).
+##############
+
+get.name.genpos.loop <- function(matched_rows, genepos) {
+  # Create an empty data frame to store results
+  output <- data.frame()
+  
+  # Loop through each row in matched_rows
+  for (i in 1:nrow(matched_rows)) {
+    #  Get gene name and info from the current row
+    gene_name <- matched_rows$Gene_name[i]
+    chr <- matched_rows$Chr[i]
+    gene_start <- matched_rows$Gene_Start[i]
+    gene_end <- matched_rows$Gene_End[i]
+    exon_intron <- matched_rows$exon_intron[i]
+    
+    # Use get.genepos() to get gene position
+    gene_pos <- get.name.genepos(gene_name, genepos)
+    
+    # / Check if gene_pos is atomic and convert if necessary
+    if (is.atomic(gene_pos)) {
+      gene_pos <- data.frame(Chr = gene_pos[1], Start = gene_pos[2], End = gene_pos[3])
+    }
+    
+    #  Combine results into a new data frame row
+    new_row <- data.frame(
+      Gene_Chr = chr,
+      Gene_name = gene_name,
+      Gene_Start = gene_start,
+      Gene_End = gene_end,
+      exon_intron = exon_intron,
+      Chr_genepos = gene_pos$Chr,
+      Start_genepos = gene_pos$Start,
+      End_genepos = gene_pos$End
+    )
+    
+    # Add new row to the output data frame
+    output <- bind_rows(output, new_row)
+  }
+  # Return the final result data frame
+  return(output)
+}
+
+```
+
+
+
+```{r}
+##############
+#Function to return copynumber for a specific region
+##############
+get.cn <- function(seg, chr, start, stop = start, mean.seg=TRUE, adjusted.seg=FALSE){
+	#20140519: added adjusted.seg: if true, will calculate the mean segment size for just the region of interest, ie, it will weigh the average copy number by the size of the region affected
+	#20160322: Added ability to handle subclonal CNs if they are there (must have column name "nAraw"
+	seg <- seg[seg[,2] == chr,]
+	seg <- seg[seg[,3] < stop & seg[,4] > start,]
+	if(mean.seg==TRUE){
+		dup.names <- unique(as.character(seg[,1][duplicated(seg[,1])]))
+		for(i in dup.names){
+			if(!adjusted.seg){
+				tmp <- seg[seg[,1] == i,]
+				mean.vect.cn <- sum(((tmp[,4]-tmp[,3]) * tmp[,6]))/sum(tmp[,4]-tmp[,3])
+				tmp[1,4] <- tmp[nrow(tmp),4]
+				tmp[1,5] <- sum(tmp[,5])
+				tmp[1,6] <- mean(mean.vect.cn)
+				if(any(colnames(tmp) %in% 'nAraw')){
+					tmp[1,'nAraw'] <- sum(((tmp[,4]-tmp[,3]) * tmp[,'nAraw']))/sum(tmp[,4]-tmp[,3])
+					tmp[1,'nBraw'] <- sum(((tmp[,4]-tmp[,3]) * tmp[,'nBraw']))/sum(tmp[,4]-tmp[,3])
+				}
+			}
+			if(adjusted.seg){
+				tmp <- seg[seg[,1] == i,]
+				tmp.start <- tmp[1,3]
+				tmp.end <- tmp[nrow(tmp),4]
+				tmp[1,3] <- start
+				tmp[nrow(tmp),4] <- stop
+				mean.vect.cn <- sum(((tmp[,4]-tmp[,3]) * tmp[,6]))/sum(tmp[,4]-tmp[,3])
+				if(any(colnames(tmp) %in% 'nAraw')){
+					tmp[1,'nAraw'] <- sum(((tmp[,4]-tmp[,3]) * tmp[,'nAraw']))/sum(tmp[,4]-tmp[,3])
+					tmp[1,'nBraw'] <- sum(((tmp[,4]-tmp[,3]) * tmp[,'nBraw']))/sum(tmp[,4]-tmp[,3])
+				}
+				tmp[1,3] <- tmp.start
+				tmp[1,4] <- tmp.end
+				tmp[1,5] <- sum(tmp[,5])
+				tmp[1,6] <- mean(mean.vect.cn)
+			}
+			seg[seg[,1] == i,] <- tmp
+		}
+		seg <- seg[!duplicated(seg[,1]),]
+	}
+	return(seg)
+}
+
+```
+
+```{r}
+#  Define a function to process gene copy number information
+get.cn.loop <- function(output, ascat, missing_file = "missing_gene_get.cn.txt") {
+  # Create empty data frames to store results and missing information
+  cn_results <- data.frame()
+  missing_genes <- data.frame()
+  missing_count <- 0  # Initialize a counter for missing rows
+  
+  #  Loop through each gene in output
+  for (i in 1:nrow(output)) {
+    # Get gene information
+    gene_name <- output$Gene_name[i]
+    chr <- output$Chr_genepos[i]
+    start <- output$Start_genepos[i]
+    end <- output$End_genepos[i]
+    exon_intron <- output$exon_intron[i]
+    
+    #  Use get.cn() to get copy number segment information
+    gene_segment <- get.cn(ascat, chr, start, end, adjusted.seg = TRUE)
+    
+    #  Check if gene_segment has valid non-NA nAraw and nBraw columns
+    if (!("nAraw" %in% names(gene_segment) && "nBraw" %in% names(gene_segment) &&
+          any(!is.na(gene_segment$nAraw)) && any(!is.na(gene_segment$nBraw)))) {
+      
+      #  Increment missing count and record missing information
+      missing_count <- missing_count + 1
+      missing_genes <- bind_rows(missing_genes, data.frame(
+        Chr = chr,
+        Gene_name = gene_name,
+        Gene_Start = output$Gene_Start[i],  
+        Gene_End = output$Gene_End[i],      
+        exon_intron = exon_intron
+      ))
+      next  # 跳过Skip this iteration and move to the next gene
+    }
+    
+    #  Calculate cn and set ID
+    gene_cn <- setNames(gene_segment$nAraw + gene_segment$nBraw, gene_segment$ID)
+    
+    # Check if gene_cn is an empty vector 
+    if (length(gene_cn) == 0) {
+      next  #  Skip this iteration and move to the next gene
+    }
+    
+    #  Convert each result to a data frame format and add to cn_results
+    gene_cn_df <- data.frame(
+      Chr = chr,
+      Gene_name = gene_name,
+      ID = names(gene_cn),
+      cn = as.vector(gene_cn),
+      exon_intron = exon_intron
+    )
+    
+    #  Combine result rows into the final data frame
+    cn_results <- bind_rows(cn_results, gene_cn_df)
+  }
+
+  # Save missing gene information to file
+  write.csv(missing_genes, missing_file, row.names = FALSE, quote = FALSE)
+  
+  # Output the ratio of missing count to total rows
+  cat("Missing rows in gene_segment (nAraw/nBraw not found):", missing_count, "\n")
+  cat("Total rows in output:", nrow(output), "\n")
+  cat("Ratio of missing rows:", missing_count / nrow(output), "\n")
+  
+  #  Return the data frame with copy number results
+  return(cn_results)
+}
+
+# Example 
+# cn_results <- get.cn.loop(output, ascat)
+#get cn_results and missing results both file and count
+
+```
+
+
+```{r}
+#   Define the function to find matching/dismatching rows in genepos
+get.matching_dismatching_rows <- function(gene_list_processed_duplication, genepos) {
+  
+  # Ensure Chr and chrom columns are character type
+  gene_list_processed <- gene_list_processed %>%
+    mutate(Chr = as.character(Chr))
+  
+  genepos <- genepos %>%
+    mutate(chrom = as.character(chrom))
+  
+  # Find rows with complete matches in gene_list_processed
+  matched_rows <- gene_list_processed %>%
+    semi_join(genepos, by = c("Chr" = "chrom", "Gene_name" = "name"))
+  
+  # Find rows with no matches in gene_list_processed
+  dismatched_rows <- gene_list_processed %>%
+    anti_join(genepos, by = c("Chr" = "chrom", "Gene_name" = "name"))
+  
+  # Check for duplicates in genepos
+  duplicates_in_genepos <- genepos %>%
+    group_by(chrom, name) %>%
+    filter(n() > 1)
+  
+  # Print counts of matched, dismatched, and duplicate rows, return results
+  cat("Number of matched rows:", nrow(matched_rows), "\n")
+  cat("Number of dismatched rows:", nrow(dismatched_rows), "\n")
+  cat("Number of duplicate rows in genepos:", nrow(duplicates_in_genepos), "\n")
+  
+  #  Return a list containing all results
+  return(list(
+    matched_rows = matched_rows,
+    dismatched_rows = dismatched_rows,
+    duplicates_in_genepos = duplicates_in_genepos
+  ))
+}
+
+# Example 
+# results <- get.matching_dismatching_rows(gene_list_processed_duplication, genepos)
+# matched_rows <- results$matched_rows
+# dismatched_rows <- results$dismatched_rows
+# duplicates_in_genepos <- results$duplicates_in_genepos
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Load gene position data
+genepos <- get.genepos(load.genepos=TRUE, posfile='genes.UCSC.hg19.grch37.20141112.txt', return.genepos=TRUE)
+```
+
+```{r}
+gene_list <- read.csv('combined_exon_intron_filtered.csv')
+```
+
+#test
+```{r}
+gene_NM_004173 <- 'NM_004173'
+genepos <- get.genepos(gene=NULL, genepos=NULL, posfile='genes.UCSC.hg19.grch37.20141112.txt', load.genepos=TRUE, return.genepos=TRUE)
+
+gene_NM_004173_pos <- get.genepos(gene_NM_004173, genepos=genepos)
+
+```
+
+```{r}
+gene_NM_004173_segment <- get.cn(ascat, gene_NM_004173_pos[1], gene_NM_004173_pos[2], gene_NM_004173_pos[3], adjusted.seg=TRUE)
+```
+
+```{r}
+gene_NM_004173_cn <- setNames(gene_NM_004173_segment$nAraw+gene_NM_004173_segment$nBraw, gene_NM_004173_segment$ID)
+```
+
+
+
+
+ do it for all exons and introns gene
+ #step0.1 process duplication gene
+
+```{r}
+# do it for all exons and introns gene
+gene_list <- read.csv('combined_exon_intron_pos.csv')
+```
+
+```{r}
+# Find duplicated rows and merge Gene_Start and Gene_End values
+gene_list_duplication <- gene_list %>%
+  group_by(Chr, Gene_name, exon_intron) %>%  # Group by Chr and Gene_name
+  filter(n() > 1) %>%           # Select duplicated rows
+  summarize(
+    Gene_Start = min(Gene_Start),   # Take the minimum of Gene_Start
+    Gene_End = max(Gene_End),      #  Take the maximum of Gene_End
+  .groups = "drop") 
+
+gene_list_duplication <- gene_list_duplication %>%
+  select(Chr, Gene_name, Gene_Start, Gene_End, exon_intron)
+```
+
+```{r}
+#Find unique rows (unique Chr, Gene_name, and exon_intron)
+gene_list_unique <- gene_list %>%
+  group_by(Chr, Gene_name, exon_intron) %>%  # Group by Chr, Gene_name, and exon_intron
+  filter(n() == 1) %>%  # Select unique rows
+  ungroup()
+```
+
+```{r}
+#combine
+gene_list_processed <- bind_rows(gene_list_duplication, gene_list_unique)
+```
+
+```{r}
+#Save 
+write.csv(gene_list_processed, "combined_exon_intron_pos_processed_duplication.csv", row.names = FALSE)
+```
+
+step0.2 Find matching/dismatching rows in genepos
+
+```{r}
+gene_list_processed <- gene_list_processed %>%
+  mutate(Chr = as.character(Chr))
+
+genepos <- genepos %>%
+  mutate(chrom = as.character(chrom))
+```
+
+
+
+```{r}
+#Find rows with complete matches in gene_list_processed
+matched_rows <- gene_list_processed %>%
+  semi_join(genepos, by = c("Chr" = "chrom", "Gene_name" = "name"))
+dismatched_rows <- gene_list_processed %>%
+  anti_join(genepos, by = c("Chr" = "chrom", "Gene_name" = "name"))
+
+```
+
+```{r}
+# Check for duplicates in genpos
+duplicates_in_genepos <- genepos %>%
+  group_by(chrom, name) %>%
+  filter(n() > 1)
+```
+
+```{r}
+#save
+write.csv(matched_rows, "combined_exon_intron_pos_processed_duplication_match_genes.UCSC.hg19.grch37.20141112.csv", row.names = FALSE)     
+write.csv(dismatched_rows, "combined_exon_intron_pos_processed_duplication_dismatch_genes.UCSC.hg19.grch37.20141112.csv", row.names = FALSE)
+```
+
+step1 get genepos for esch filtered genes in matched_rows
+```{r}
+#Create an empty data frame to store results
+output <- data.frame()
+
+for (i in 1:nrow(matched_rows)) {
+  # Get gene name and other info from the current row
+  gene_name <- matched_rows$Gene_name[i]
+  chr <- matched_rows$Chr[i]
+  gene_start <- matched_rows$Gene_Start[i]
+  gene_end <- matched_rows$Gene_End[i]
+  exon_intron <- matched_rows$exon_intron[i]
+  
+  #  Use get.genepos() to get gene position
+  gene_pos <- get.name.genepos(gene_name, genepos)
+  #Check if gene_pos is atomic and convert if necessary
+  gene_pos <- data.frame(Chr = gene_pos[1], Start = gene_pos[2], End = gene_pos[3])
+  
+  
+  # Combine results into a new data frame row
+  new_row <- data.frame(
+    Gene_Chr = chr,
+    Gene_name = gene_name,
+    Gene_Start = gene_start,
+    Gene_End = gene_end,
+    exon_intron = exon_intron,
+    Chr_genepos = gene_pos$Chr,
+    Start_genepos = gene_pos$Start,
+    End_genepos = gene_pos$End
+  )
+  
+  # Add new row to the output data frame
+  output <- bind_rows(output, new_row)
+}
+```
+
+```{r}
+#save
+write.csv(output, "genepos_combined_exon_intron_pos_processed_duplication_match_genes.UCSC.hg19.grch37.20141112.csv", row.names = FALSE)
+```
+
+
+
+
+#test atomic --> data frame
+```{r}
+gene_NM_004173_pos_1 <- data.frame(Chr = gene_NM_004173_pos[1], Start = gene_NM_004173_pos[2], End = gene_NM_004173_pos[3])
+```
+
+#test
+```{r}
+non_matching_rows <- output %>%
+  filter(Gene_Chr != Chr_genepos)
+```
+
+#Check if there are any NA values in the entire data frame
+anyNA(output)
+
+#test get.name.genpos.loop
+```{r}
+output_data <- get.name.genpos.loop(matched_rows,genepos)
+```
+
+#step2 get cns for each gene
+
+```{r}
+# Create empty data frames to store results and missing information
+cn_results <- data.frame()
+missing_genes <- data.frame()
+
+#  Loop through each gene in output
+for (i in 1:nrow(output)) {
+  # Get gene information
+  gene_name <- output$Gene_name[i]
+  chr <- output$Chr_genepos[i]
+  start <- output$Start_genepos[i]
+  end <- output$End_genepos[i]
+  exon_intron <- output$exon_intron[i]
+  
+  # Use get.cn() to get copy number segment information
+  gene_segment <- get.cn(ascat, chr, start, end, adjusted.seg = TRUE)
+  #Check if gene_segment has valid non-NA nAraw and nBraw columns
+  if (!("nAraw" %in% names(gene_segment) && "nBraw" %in% names(gene_segment) &&
+        any(!is.na(gene_segment$nAraw)) && any(!is.na(gene_segment$nBraw)))) {
+    #  Print error message and record missing information in missing_genes
+    message("Error: Missing or NA nAraw or nBraw for gene ", gene_name, " (Row ", i, ")")
+    missing_genes <- bind_rows(missing_genes, data.frame(
+      Chr = chr,
+      Gene_name = gene_name,
+      Gene_Start = output$Gene_Start[i],  #  Use the original Gene_Start column
+      Gene_End = output$Gene_End[i],      # Use the original Gene_End column
+      exon_intron = exon_intron
+    ))
+    next  # Skip this iteration and move to the next gene
+  }
+  
+  # Calculate cn and set ID
+  gene_cn <- setNames(gene_segment$nAraw + gene_segment$nBraw, gene_segment$ID)
+  
+  # Check if gene_cn is an empty vector
+  if (length(gene_cn) == 0) {
+    message("Warning: gene_cn is empty for gene ", gene_name, " (Row ", i, ")")
+    next  # Skip this iteration and move to the next gene
+  }
+  
+  #  Convert each result to a data frame format and add to cn_results
+  gene_cn_df <- data.frame(
+    Chr = chr,
+    Gene_name = gene_name,
+    ID = names(gene_cn),
+    cn = as.vector(gene_cn),
+    exon_intron = exon_intron
+  )
+  
+  # Combine result rows into the final data frame
+  cn_results <- bind_rows(cn_results, gene_cn_df)
+}
+
+# Save missing gene information to file
+write.csv(missing_genes, "missing_gene_get.cn.txt", row.names = FALSE, quote = FALSE)
+
+
+```
+
+
+```{r}
+#save
+write.csv(cn_results, "copy_numbers_genes.UCSC.hg19.grch37.20141112.csv", row.names = FALSE)
+```
+
+#test function
+```{r}
+cn_results_test <- get.cn.loop(output, ascat)
+```
+
